@@ -1,23 +1,94 @@
-import React, { useState } from "react";
-import { Paper, Stepper, Step, StepLabel, Typography, CircularProgress, Divider, Button } from "@material-ui/core";
+import React, { useState, useEffect } from "react";
+import { Paper, Stepper, Step, StepLabel, Typography, CircularProgress, Divider, Button, CssBaseline } from "@material-ui/core";
+import { Link, useNavigate } from "react-router-dom";
 
 import useStyles from "./styles";
 import AddressForm from "../AddressForm";
 import PaymentForm from "../PaymentForm";
+import { commerce } from "../../../lib/commerce";
 
 const steps = ["Shipping address", "Payment details"];
 
-const Checkout = () => {
+const Checkout = ({ cart, order, onCaptureCheckout, error }) => {
   const [activeStep, setActiveStep] = useState(0);
-
+  const [checkoutToken, setCheckoutToken] = useState(null);
+  const [shippingData, setShippingData] = useState({});
+  const [isFinished, setIsFinished] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
   const classes = useStyles();
 
-  const Confirmation = () => <div>Confirmation</div>;
+  useEffect(() => {
+    if (cart.id) {
+      const generateToken = async () => {
+        try {
+          const token = await commerce.checkout.generateToken(cart.id, { type: "cart" });
 
-  const Form = () => (activeStep === 0 ? <AddressForm /> : <PaymentForm />);
+          setCheckoutToken(token);
+          setIsLoading(false);
+        } catch (error) {
+          navigate("/");
+        }
+      };
+
+      generateToken();
+    }
+  }, [cart]);
+
+  const nextStep = () => setActiveStep((prevActiveStep) => prevActiveStep + 1);
+
+  const backStep = () => setActiveStep((prevActiveStep) => prevActiveStep - 1);
+
+  const next = (data) => {
+    setShippingData(data);
+
+    nextStep();
+  };
+
+  const timeout = () => {
+    setTimeout(() => {
+      setIsFinished(true);
+    }, 2000);
+  };
+
+  let Confirmation = () =>
+    // mock the real payment
+    isFinished ? (
+      <>
+        <div>
+          <Typography variant="h5" gutterBottom>
+            Thank you for your purchase
+          </Typography>
+          <Divider className={classes.divider} />
+        </div>
+        <br />
+        <Button component={Link} to="/" variant="outlined" type="button">
+          Back to Home
+        </Button>
+      </>
+    ) : (
+      <div className={classes.spinner}>
+        <CircularProgress />
+      </div>
+    );
+
+  const Form = () =>
+    activeStep === 0 ? (
+      <AddressForm checkoutToken={checkoutToken} next={next} />
+    ) : (
+      <PaymentForm
+        shippingData={shippingData}
+        checkoutToken={checkoutToken}
+        backStep={backStep}
+        onCaptureCheckout={onCaptureCheckout}
+        nextStep={nextStep}
+        timeout={timeout}
+      />
+    );
 
   return (
     <>
+      <CssBaseline />
       <div className={classes.toolbar} />
       <main className={classes.layout}>
         <Paper className={classes.paper}>
@@ -31,7 +102,15 @@ const Checkout = () => {
               </Step>
             ))}
           </Stepper>
-          {activeStep === steps.length ? <Confirmation /> : <Form />}
+          {activeStep === steps.length ? (
+            <Confirmation />
+          ) : isLoading ? (
+            <div className={classes.spinner}>
+              <CircularProgress />
+            </div>
+          ) : (
+            <Form />
+          )}
         </Paper>
       </main>
     </>
